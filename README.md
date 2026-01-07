@@ -2,6 +2,8 @@
 
 > **專為台灣福委會、行政人員設計的「零門檻」抽獎公告系統。不需連網、資料不外流，用 Excel 就能控制大螢幕！**
 
+![系統主畫面](https://pedaleon.com/wp-content/uploads/2026/01/主畫面-1.jpg)
+
 ## 💡 為什麼開發這個工具？ (Why)
 看到每年尾牙，行政同仁為了「如何在大螢幕上公平、漂亮地呈現得獎名單」而頭痛。市面上的線上抽獎程式需要連網（擔心個資外洩），PPT 手動播放又太累。
 
@@ -28,6 +30,11 @@
 1.  前往 [**Releases 頁面**](https://github.com/yanochang11/offline-excel-lucky-draw-board/releases/tag/V1.0.1) 下載最新的懶人包 (ZIP)。
 2.  解壓縮後，會看到 `LuckyDraw.exe` 和 `抽獎名單與設定.xlsx`。
 3.  打開 Excel，填入您的獎項與名單，並設定標題。
+    
+    ![得獎名單設定](https://pedaleon.com/wp-content/uploads/2026/01/得獎名單輸入表單.jpg)
+    ![人員名單資料庫](https://pedaleon.com/wp-content/uploads/2026/01/人員名單.jpg)
+    ![系統設定](https://pedaleon.com/wp-content/uploads/2026/01/系統設定表單.jpg)
+
 4.  雙擊 `LuckyDraw.exe` 即可開始投影！
 5.  **請注意是否被防毒軟體阻擋**，這套軟體完全開源 (Open Source)，如果您對 .exe 檔有資安疑慮，歡迎直接到 GitHub 下載原始碼 (Source Code)，自行使用 Python 執行，保證乾淨無毒。
 
