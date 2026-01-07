@@ -7,7 +7,7 @@ import sys
 # --- 預設設定 ---
 DEFAULT_CONFIG = {
     "title": "幸運大抽獎",
-    "subtitle": "得獎名單自動輪播系統", # 預設副標題
+    "subtitle": "得獎名單", 
     "refresh_rate": 5000,
     "scroll_speed": 1.5,
     "col_award": "獎項",
@@ -40,7 +40,7 @@ class Api:
                     val = row[1]
                     
                     if key == "活動標題": config["title"] = str(val)
-                    elif key == "活動副標題": config["subtitle"] = str(val) # 新增讀取副標題
+                    elif key == "活動副標題": config["subtitle"] = str(val)
                     elif key == "滾動速度": config["scroll_speed"] = float(val)
                     elif key == "更新頻率": config["refresh_rate"] = int(val) * 1000
                     elif key == "欄位-獎項": config["col_award"] = str(val)
@@ -48,19 +48,24 @@ class Api:
                     elif key == "欄位-單位": config["col_dept"] = str(val)
                     elif key == "欄位-工號": config["col_id"] = str(val)
             except:
-                pass # 讀取失敗則用預設值
+                pass 
 
-            # 2. 讀取名單
-            try:
-                df = pd.read_excel(file_path, sheet_name='得獎名單')
-            except:
-                df = pd.read_excel(file_path, sheet_name=0)
-
-            df.columns = df.columns.str.strip()
             col_award = config["col_award"]
             col_name = config["col_name"]
             col_dept = config["col_dept"]
             col_id = config["col_id"]
+
+            # 2. 讀取名單 (強制工號轉字串)
+            try:
+                converters = {col_id: str}
+                try:
+                    df = pd.read_excel(file_path, sheet_name='得獎名單', converters=converters)
+                except:
+                    df = pd.read_excel(file_path, sheet_name=0, converters=converters)
+            except Exception as e:
+                return json.dumps({"error": f"讀取名單失敗: {str(e)}"})
+
+            df.columns = df.columns.str.strip()
 
             if col_name not in df.columns or col_award not in df.columns:
                 return json.dumps({"error": f"Excel 找不到欄位：[{col_name}] 或 [{col_award}]"})
@@ -76,10 +81,11 @@ class Api:
                 award = str(row[col_award]).strip()
                 name = str(row[col_name]).strip()
                 dept = str(row[col_dept]).strip() if col_dept in df.columns else ""
-                emp_id = str(row[col_id]).strip() if col_id in df.columns else ""
                 
-                if dept == 'nan': dept = ''
-                if emp_id == 'nan': emp_id = ''
+                raw_emp_id = row[col_id] if col_id in df.columns else ""
+                emp_id = str(raw_emp_id).strip()
+                if emp_id.lower() == 'nan': emp_id = ''
+                if emp_id.endswith('.0'): emp_id = emp_id[:-2]
 
                 if award not in result:
                     result[award] = []
@@ -91,7 +97,7 @@ class Api:
                 "data": result, 
                 "meta": {
                     "title": config["title"],
-                    "subtitle": config["subtitle"], # 回傳副標題
+                    "subtitle": config["subtitle"],
                     "scroll_speed": config["scroll_speed"],
                     "refresh_rate": config["refresh_rate"]
                 }
@@ -99,8 +105,12 @@ class Api:
 
         except Exception as e:
             return json.dumps({"error": f"讀取錯誤: {str(e)}"})
+    
+    def toggle_fullscreen(self):
+        window = webview.windows[0]
+        window.toggle_fullscreen()
 
-# --- HTML/CSS/JS ---
+# --- HTML/CSS/JS (全新側邊欄佈局) ---
 html_content = """
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -109,81 +119,183 @@ html_content = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lucky Draw</title>
     <style>
-        :root { --bg-color: #8B0000; --card-bg: #fffbf0; --border-color: #D4AF37; --accent-color: #c41e3a; }
-        body, html { margin: 0; padding: 0; height: 100%; font-family: "Microsoft JhengHei", sans-serif; background-color: var(--bg-color); color: #333; overflow: hidden; user-select: none; }
+        :root { --sidebar-bg: #8B0000; --main-bg: #fffbf0; --accent-gold: #FFD700; --text-red: #c41e3a; }
         
-        /* 背景紋理 */
-        body::before { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: repeating-linear-gradient(45deg, transparent 0, transparent 20px, rgba(255, 215, 0, 0.05) 20px, rgba(255, 215, 0, 0.05) 22px); z-index: -1; }
-        
-        /* 頂部 Header */
-        header { text-align: center; padding: 15px; background: linear-gradient(180deg, #b30000 0%, #800000 100%); border-bottom: 4px solid var(--border-color); position: fixed; top: 0; width: 100%; z-index: 200; height: 110px; display: flex; flex-direction: column; justify-content: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
-        h1 { margin: 0; color: var(--border-color); text-shadow: 2px 2px 0px #333; font-size: 2.5rem; letter-spacing: 5px; }
-        .sub-title { color: #ffd700; font-size: 1.1rem; margin-top: 5px; letter-spacing: 2px; }
-        
-        /* 滾動區 */
-        #scroll-container { margin-top: 115px; height: calc(100vh - 115px); overflow-y: auto; padding: 20px; box-sizing: border-box; scrollbar-width: none; }
-        #scroll-container::-webkit-scrollbar { display: none; }
-        #content-wrapper { max-width: 1000px; margin: 0 auto; padding-bottom: 150px; }
-        
-        /* 獎項卡片 */
-        .award-group { background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 15px; margin-bottom: 30px; padding: 0 20px 20px 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.3); animation: fadeIn 0.5s ease; position: relative; overflow: clip; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        .award-header { text-align: center; position: sticky; top: 0; z-index: 10; background-color: var(--card-bg); padding: 20px 0 15px 0; margin-bottom: 15px; border-bottom: 3px double #e0c080; box-shadow: 0 4px 6px -4px rgba(0,0,0,0.2); }
-        .award-name { font-size: 2rem; color: var(--accent-color); font-weight: bold; }
-        .winner-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-        .winner-item { background: #fff; border-left: 5px solid var(--accent-color); border-radius: 5px; padding: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .w-info h3 { margin: 0; font-size: 1.3rem; }
-        .w-info p { margin: 0; font-size: 0.85rem; color: #666; }
-        .w-id { background: #eee; padding: 3px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
-        
-        /* --- Footer 版權宣告 --- */
-        .footer {
-            position: fixed;
-            bottom: 5px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255, 255, 255, 0.4); /* 半透明白 */
-            font-size: 0.8rem;
-            z-index: 1000;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-            pointer-events: auto;
+        body, html { 
+            margin: 0; padding: 0; 
+            height: 100%; 
+            font-family: "Microsoft JhengHei", sans-serif; 
+            overflow: hidden; 
+            user-select: none; 
+            display: flex; /* 改用 Flex 佈局 */
         }
-        .footer a {
-            color: #FFD700; /* 金色連結 */
-            text-decoration: none;
-            font-weight: bold;
-            transition: color 0.3s;
-        }
-        .footer a:hover {
-            color: #fff;
-            text-decoration: underline;
+        
+        /* --- 左側側邊欄 (Sidebar) --- */
+        .sidebar {
+            width: 320px; /* 固定寬度 */
+            height: 100vh;
+            background: linear-gradient(160deg, #a30000 0%, #600000 100%);
+            border-right: 5px solid var(--accent-gold);
+            box-shadow: 5px 0 20px rgba(0,0,0,0.5);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            color: white;
+            text-align: center;
+            position: relative;
         }
 
-        /* 狀態列移到右下角，避免跟 footer 撞到 */
-        #status-bar { position: fixed; bottom: 5px; right: 10px; font-size: 10px; color: rgba(255,255,255,0.3); z-index: 1000; text-align: right; }
-        .error-msg { color: yellow; font-weight: bold; padding: 20px; text-align: center; font-size: 1.5rem;}
+        /* 裝飾圖案 */
+        .sidebar::before {
+            content: "";
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><g fill="%23ffd700" fill-opacity="0.05"><path d="M20 0l20 20-20 20L0 20z"/></g></svg>');
+            pointer-events: none;
+        }
+
+        .main-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--accent-gold);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+            line-height: 1.3;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        .sub-title {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.9);
+            letter-spacing: 2px;
+            margin-bottom: 40px; /* 與下方拉開距離 */
+            border-top: 1px solid rgba(255,215,0,0.3);
+            border-bottom: 1px solid rgba(255,215,0,0.3);
+            padding: 10px 0;
+            width: 100%;
+        }
+
+        .footer-info {
+            position: absolute;
+            bottom: 20px;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.4);
+        }
+        .footer-info a { color: var(--accent-gold); text-decoration: none; }
+
+        /* --- 右側主要滾動區 (Main Content) --- */
+        .main-content {
+            flex: 1; /* 佔滿剩餘寬度 */
+            height: 100vh;
+            background-color: var(--main-bg);
+            position: relative;
+            background-image: radial-gradient(circle at 50% 50%, rgba(200, 0, 0, 0.02) 0%, transparent 60%);
+        }
+
+        #scroll-container { 
+            width: 100%;
+            height: 100vh; /* 滿版高度 */
+            overflow-y: hidden; /* 隱藏原生捲軸，用 JS 控制 */
+            padding: 40px; /* 內縮一點比較好看 */
+            box-sizing: border-box;
+        }
+        
+        #content-wrapper { max-width: 1200px; margin: 0 auto; padding-bottom: 100px; }
+        
+        /* 獎項卡片 */
+        .award-group { 
+            background: #fff; 
+            border: 2px solid #e6cfa3; 
+            border-radius: 15px; 
+            margin-bottom: 40px; 
+            padding: 0 25px 25px 25px; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
+            position: relative; 
+            overflow: clip; 
+        }
+        
+        .award-header { 
+            text-align: left; /* 改為靠左 */
+            position: sticky; top: 0; z-index: 10; 
+            background-color: #fff; 
+            padding: 20px 0 15px 0; 
+            margin-bottom: 20px; 
+            border-bottom: 3px double var(--text-red); 
+            display: flex; justify-content: space-between; align-items: baseline;
+            box-shadow: 0 5px 10px -5px rgba(0,0,0,0.1);
+        }
+        
+        .award-name { font-size: 2.2rem; color: var(--text-red); font-weight: bold; }
+        .award-count { font-size: 1rem; color: #888; }
+        
+        .winner-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
+        
+        .winner-item { 
+            background: #fffbf0; 
+            border-left: 6px solid var(--text-red); 
+            border-radius: 6px; 
+            padding: 12px 15px; 
+            display: flex; justify-content: space-between; align-items: center; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+        }
+        .w-info h3 { margin: 0; font-size: 1.4rem; color: #333; }
+        .w-info p { margin: 2px 0 0; font-size: 0.9rem; color: #666; }
+        .w-id { background: #e0e0e0; color:#555; padding: 3px 8px; border-radius: 4px; font-size: 0.9rem; font-weight: bold; }
+
+        /* 右下角控制區 */
+        #controls-area { position: fixed; bottom: 20px; right: 20px; z-index: 1000; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; pointer-events: auto;}
+        #status-bar { font-size: 11px; color: #999; margin-bottom: 5px; background: rgba(255,255,255,0.8); padding: 2px 5px; border-radius: 3px;}
+        
+        .btn-fullscreen {
+            background: var(--text-red);
+            border: 1px solid white;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 5px; font-weight: bold;
+        }
+        .btn-fullscreen:hover { transform: scale(1.05); background: #a30000; }
+        
+        .error-msg { color: #555; font-weight: bold; padding: 50px; text-align: center; font-size: 1.5rem;}
     </style>
 </head>
 <body>
-    <header>
-        <h1 id="main-title">載入中...</h1>
+
+    <aside class="sidebar">
+        <div id="main-title" class="main-title">載入中...</div>
         <div id="sub-title" class="sub-title"></div>
-    </header>
+        
+        <div class="footer-info">
+            Designed by <a href="https://pedaleon.com/?utm_source=luckdraw&utm_medium=app" target="_blank">PedaleOn</a>
+        </div>
+    </aside>
 
-    <div id="scroll-container">
-        <div id="content-wrapper"></div>
-    </div>
-
-    <div class="footer">
-        由 <a href="https://pedaleon.com/?utm_source=luckdraw&utm_medium=app" target="_blank">PedaleOn</a> 開發
-    </div>
-
-    <div id="status-bar"></div>
+    <main class="main-content">
+        <div id="scroll-container">
+            <div id="content-wrapper"></div>
+        </div>
+        
+        <div id="controls-area">
+            <div id="status-bar"></div>
+            <button class="btn-fullscreen" onclick="callFullScreen()">
+                ⛶ 全螢幕 (F)
+            </button>
+        </div>
+    </main>
 
     <script>
         let refreshRate = 5000;
-        let scrollSpeed = 1.5; // 可以改大一點測試，例如 3.0
+        let scrollSpeed = 1.5;
         let isScrolling = true;
+        let scrollDirection = 1;
+        let currentScrollPos = 0; // 高精度位置
         let lastDataHash = "";
         let timer = null;
         let scrollFrame = null;
@@ -206,14 +318,12 @@ html_content = """
                     if(res.meta) {
                         document.getElementById('main-title').innerText = res.meta.title;
                         document.getElementById('sub-title').innerText = res.meta.subtitle || "";
-                        scrollSpeed = res.meta.scroll_speed || 1.5;
+                        scrollSpeed = res.meta.scroll_speed;
                         let newRate = res.meta.refresh_rate || 5000;
                         if (newRate !== refreshRate) refreshRate = newRate;
                     }
-
                     renderUI(res.data);
-                    document.getElementById('status-bar').innerText = "Last Update: " + new Date().toLocaleTimeString();
-                    
+                    document.getElementById('status-bar').innerText = "更新時間: " + new Date().toLocaleTimeString();
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(updateData, refreshRate);
                 }
@@ -224,46 +334,38 @@ html_content = """
             const currentHash = JSON.stringify(groupedData);
             if (currentHash === lastDataHash) return;
             lastDataHash = currentHash;
-
             const wrapper = document.getElementById('content-wrapper');
             let html = "";
             const awards = Object.keys(groupedData);
-
             if (awards.length === 0) {
-                wrapper.innerHTML = "<div style='text-align:center;color:white;margin-top:50px;font-size:1.5rem'>等待開獎中...</div>";
+                wrapper.innerHTML = "<div style='text-align:center;color:#999;margin-top:100px;font-size:1.5rem'>等待開獎中...</div>";
                 return;
             }
-
             awards.forEach(award => {
                 const list = groupedData[award];
-                html += `<div class="award-group"><div class="award-header"><span class="award-name">${award}</span><span style="font-size:0.9rem; color:#666; margin-left:10px;">(共${list.length}位)</span></div><div class="winner-grid">`;
+                html += `<div class="award-group"><div class="award-header"><span class="award-name">${award}</span><span class="award-count">共${list.length}位</span></div><div class="winner-grid">`;
                 list.forEach(p => {
                     html += `<div class="winner-item"><div class="w-info"><h3>${p.name}</h3><p>${p.dept}</p></div><div class="w-id">${p.empId}</div></div>`;
                 });
                 html += `</div></div>`;
             });
             wrapper.innerHTML = html;
-
-            // --- 修正重點：資料渲染完後，立刻檢查並啟動滾動 ---
-            // 稍微延遲 100ms 讓瀏覽器重新計算高度
-            setTimeout(() => {
-                checkAndStartScroll();
+            
+            setTimeout(() => { 
+                scrollDirection = 1; 
+                checkAndStartScroll(); 
             }, 100);
         }
 
         function checkAndStartScroll() {
             const container = document.getElementById('scroll-container');
-            const content = document.getElementById('content-wrapper');
-
-            // 如果已經在跑，先停掉避免重複
             if (scrollFrame) cancelAnimationFrame(scrollFrame);
-
-            // 判斷是否需要滾動 (內容高度 > 容器高度)
+            
             if (container.scrollHeight > container.clientHeight) {
                 isScrolling = true;
+                currentScrollPos = container.scrollTop;
                 scrollLoop();
             } else {
-                // 內容太少，不用滾，直接歸零
                 container.scrollTop = 0;
             }
         }
@@ -272,36 +374,48 @@ html_content = """
             const container = document.getElementById('scroll-container');
             
             if (isScrolling) {
-                container.scrollTop += scrollSpeed;
+                currentScrollPos += (scrollSpeed * scrollDirection);
+                container.scrollTop = currentScrollPos;
                 
-                // 判斷到底部：scrollTop + clientHeight 與 scrollHeight 的誤差在 2px 內
-                // 如果到底了，或者因為浮點數誤差導致卡住
-                if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) {
-                    
-                    // 暫停滾動
+                // 到底部
+                if (scrollDirection === 1 && (currentScrollPos + container.clientHeight >= container.scrollHeight - 2)) {
                     isScrolling = false;
-                    
-                    // 3秒後跳回頂部並繼續
                     setTimeout(() => {
-                        container.scrollTop = 0;
+                        scrollDirection = -1; 
                         isScrolling = true;
-                        // 重新啟動迴圈
-                        scrollFrame = requestAnimationFrame(scrollLoop); 
-                    }, 3000);
-                    
-                    return; // 結束這一次的迴圈，等待 setTimeout 喚醒
+                        scrollFrame = requestAnimationFrame(scrollLoop);
+                    }, 3000); 
+                    return;
+                }
+
+                // 到頂部
+                if (scrollDirection === -1 && currentScrollPos <= 0) {
+                    currentScrollPos = 0;
+                    container.scrollTop = 0;
+                    isScrolling = false;
+                    setTimeout(() => {
+                        scrollDirection = 1; 
+                        isScrolling = true;
+                        scrollFrame = requestAnimationFrame(scrollLoop);
+                    }, 3000); 
+                    return;
                 }
             }
             scrollFrame = requestAnimationFrame(scrollLoop);
         }
 
-        // 空白鍵暫停/繼續
+        function callFullScreen() {
+            pywebview.api.toggle_fullscreen();
+        }
+
         document.addEventListener('keydown', (e) => { 
             if(e.key === ' ') { 
                 isScrolling = !isScrolling; 
-                // 如果是從暫停恢復，要確保迴圈有在跑
                 if(isScrolling) scrollLoop();
-            } 
+            }
+            if(e.key === 'f' || e.key === 'F') {
+                callFullScreen();
+            }
         });
     </script>
 </body>
@@ -310,12 +424,13 @@ html_content = """
 
 if __name__ == '__main__':
     api = Api()
+    # 注意：這裡的 width 建議設寬一點，模擬寬螢幕效果
     window = webview.create_window(
         'Lucky Draw Board', 
         html=html_content, 
         js_api=api,
-        width=1200, 
-        height=800,
+        width=1280, 
+        height=720,
         background_color='#8B0000'
     )
     webview.start(debug=False)
