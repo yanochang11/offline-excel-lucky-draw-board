@@ -23,7 +23,7 @@
 ## 🚀 快速開始 (給一般使用者)
 如果您不想看程式碼，只想直接使用軟體：
 
-1.  前往 [**Releases 頁面**]([https://github.com/您的帳號/offline-excel-lucky-draw-board/releases](https://github.com/yanochang11/offline-excel-lucky-draw-board/releases/tag/V1.0.0)) 下載最新的懶人包 (ZIP)。
+1.  前往 [**Releases 頁面**](https://github.com/yanochang11/offline-excel-lucky-draw-board/releases/tag/V1.0.0) 下載最新的懶人包 (ZIP)。
 2.  解壓縮後，會看到 `LuckyDraw.exe` 和 `抽獎名單與設定.xlsx`。
 3.  打開 Excel，填入您的獎項與名單，並設定標題。
 4.  雙擊 `LuckyDraw.exe` 即可開始投影！
