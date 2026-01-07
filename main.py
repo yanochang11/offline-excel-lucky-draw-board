@@ -110,7 +110,7 @@ class Api:
         window = webview.windows[0]
         window.toggle_fullscreen()
 
-# --- HTML/CSS/JS (融合版：舊版側邊欄風格 + 新版右側功能) ---
+# --- HTML/CSS/JS (優化版：強化獎項一體性) ---
 html_content = """
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -120,15 +120,17 @@ html_content = """
     <title>Lucky Draw System</title>
     <style>
         /* ==================== 
-           全域變數與重置 
+           全域變數 
            ==================== */
         :root {
             --sidebar-bg: #8B0000;
             --main-bg: #800000;
+            --section-bg: rgba(0, 0, 0, 0.2); /* 獎項區塊背景 */
             --card-bg: #fffbf0;
             --gold-accent: #FFD700;
+            --border-gold: #b8860b;
             --text-dark: #333;
-            --resizer-width: 5px; /* 調整為 5px 模擬原本的邊框寬度 */
+            --resizer-width: 5px;
         }
 
         * { box-sizing: border-box; }
@@ -149,34 +151,26 @@ html_content = """
         }
 
         /* ==================== 
-           左側側邊欄 (還原舊版設計) 
+           左側側邊欄 (維持舊版設計) 
            ==================== */
         .sidebar {
             width: 320px;
             min-width: 200px;
             max-width: 600px;
-            
-            /* 1. 還原漸層背景 */
             background: linear-gradient(160deg, #a30000 0%, #600000 100%);
             color: white;
-            
-            /* 2. 還原置中對齊佈局 */
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
-            
             padding: 20px;
             position: relative;
             flex-shrink: 0;
             z-index: 200;
-            
-            /* 原本的 border-right 移給 .resizer 處理，這裡改用 box-shadow */
             box-shadow: 5px 0 20px rgba(0,0,0,0.5);
         }
 
-        /* 3. 還原背景裝飾圖案 */
         .sidebar::before {
             content: "";
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -185,10 +179,8 @@ html_content = """
             z-index: 0;
         }
         
-        /* 確保內容在背景之上 */
         .sidebar > * { z-index: 1; position: relative; }
 
-        /* 4. 還原標題文字樣式 */
         .main-title {
             font-size: 2.5rem;
             font-weight: bold;
@@ -199,7 +191,6 @@ html_content = """
             letter-spacing: 2px;
         }
 
-        /* 5. 還原副標題樣式 (上下有線) */
         .sub-title {
             font-size: 1.2rem;
             color: rgba(255,255,255,0.9);
@@ -218,11 +209,11 @@ html_content = """
         .footer-info a { color: var(--gold-accent); text-decoration: none; }
 
         /* ==================== 
-           可拖拉分隔線 (改為金色，融合舊版邊框視覺) 
+           可拖拉分隔線 
            ==================== */
         .resizer {
             width: var(--resizer-width);
-            background: var(--gold-accent); /* 金色 */
+            background: var(--gold-accent);
             cursor: col-resize;
             flex-shrink: 0;
             position: relative;
@@ -230,17 +221,13 @@ html_content = """
             box-shadow: 1px 0 5px rgba(0,0,0,0.3);
         }
 
-        .resizer::after {
-            content: ""; position: absolute; left: -5px; right: -5px; top: 0; bottom: 0; z-index: 1;
-        }
-
         .resizer:hover, .resizer.resizing {
-            background: #fff; /* hover 時變亮，提示可互動 */
+            background: #fff;
             box-shadow: 0 0 10px var(--gold-accent);
         }
 
         /* ==================== 
-           右側主要內容區 (保持新版設計) 
+           右側主要內容區 
            ==================== */
         .main-content {
             flex-grow: 1;
@@ -259,18 +246,36 @@ html_content = """
         }
         .main-content::-webkit-scrollbar { display: none; }
 
-        #content-wrapper { padding-bottom: 100px; }
+        #content-wrapper { padding: 20px 40px 100px 40px; }
 
-        .prize-section { padding-bottom: 40px; }
+        /* ----------------------------------------------------
+           關鍵修改：強化一體性的獎項區塊 (Box Design)
+           ---------------------------------------------------- */
+        .prize-section {
+            /* 讓每個獎項像是一個獨立的「盒子」 */
+            margin-bottom: 50px; /* 拉大獎項間距，避免誤會 */
+            background-color: var(--section-bg); /* 整個區塊有個深色底 */
+            border: 1px solid rgba(255, 215, 0, 0.3); /* 金色細邊框 */
+            border-radius: 16px; /* 圓角 */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            position: relative; /* 為了 sticky header 定位 */
+        }
 
         .prize-header {
-            position: sticky; top: 0; z-index: 100;
-            background: linear-gradient(90deg, #a00000 0%, #600000 100%);
-            border-bottom: 3px solid var(--gold-accent);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            padding: 15px 40px;
-            display: flex; justify-content: space-between; align-items: center;
-            backdrop-filter: blur(5px);
+            position: sticky; 
+            top: 0; 
+            z-index: 100;
+            
+            /* 設計成「盒蓋」的樣子，與下方內容無縫接軌 */
+            background: linear-gradient(90deg, #b30000 0%, #800000 100%);
+            border-bottom: 2px solid var(--gold-accent);
+            border-radius: 15px 15px 0 0; /* 只圓上方，下方切齊 */
+            
+            padding: 15px 30px;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
 
         .prize-header h2 {
@@ -279,13 +284,16 @@ html_content = """
         }
 
         .prize-count {
-            background: #c0392b; color: white; padding: 5px 15px;
+            background: rgba(0,0,0,0.3);
+            color: var(--gold-accent); 
+            padding: 5px 15px;
             border-radius: 20px; font-size: 1rem;
-            border: 1px solid rgba(255,255,255,0.3);
+            border: 1px solid var(--gold-accent);
         }
 
+        /* 卡片容器：在盒子內部 */
         .winner-grid {
-            padding: 30px 40px;
+            padding: 30px; /* 內容與邊框的距離 */
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
             gap: 20px;
@@ -293,16 +301,21 @@ html_content = """
 
         .winner-card {
             background: var(--card-bg);
-            border-radius: 12px; padding: 15px 20px;
+            border-radius: 10px; 
+            padding: 15px 20px;
             display: flex; align-items: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            border-left: 6px solid #c0392b;
-            transition: transform 0.2s, box-shadow 0.2s;
+            
+            /* 視覺微調：讓卡片有點立體感，但不會搶過標題 */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border-left: 5px solid #c0392b;
+            
+            transition: transform 0.2s;
             position: relative; overflow: hidden;
         }
 
         .winner-card:hover {
-            transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+            transform: translateY(-3px); 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
 
         .winner-info { flex-grow: 1; }
@@ -313,13 +326,17 @@ html_content = """
             background: #333; padding: 4px 10px; border-radius: 6px;
             min-width: 50px; text-align: center;
         }
-
+        
+        /* 浮水印 */
         .winner-card::after {
             content: "LUCKY"; position: absolute; right: -10px; bottom: -15px;
             font-size: 4rem; font-weight: bold; color: rgba(0,0,0,0.03);
             pointer-events: none; transform: rotate(-15deg);
         }
 
+        /* ----------------------------------------------------
+           控制區
+           ---------------------------------------------------- */
         #controls-area {
             position: fixed; bottom: 20px; right: 20px; z-index: 1000;
             text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
