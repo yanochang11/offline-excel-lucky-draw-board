@@ -110,200 +110,315 @@ class Api:
         window = webview.windows[0]
         window.toggle_fullscreen()
 
-# --- HTML/CSS/JS (全新側邊欄佈局) ---
+# --- HTML/CSS/JS (全新 UI：可拖拉側邊欄 + Sticky Header + 滿版優化) ---
 html_content = """
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lucky Draw</title>
+    <title>Lucky Draw System</title>
     <style>
-        :root { --sidebar-bg: #8B0000; --main-bg: #fffbf0; --accent-gold: #FFD700; --text-red: #c41e3a; }
-        
-        body, html { 
-            margin: 0; padding: 0; 
-            height: 100%; 
-            font-family: "Microsoft JhengHei", sans-serif; 
-            overflow: hidden; 
-            user-select: none; 
-            display: flex; /* 改用 Flex 佈局 */
+        /* ==================== 
+           全域變數與重置 
+           ==================== */
+        :root {
+            --sidebar-bg-start: #4a0000;
+            --sidebar-bg-end: #1a0505;
+            --main-bg: #800000;
+            --card-bg: #fffbf0;
+            --gold-accent: #FFD700;
+            --text-dark: #333;
+            --resizer-width: 6px;
         }
-        
-        /* --- 左側側邊欄 (Sidebar) --- */
-        .sidebar {
-            width: 320px; /* 固定寬度 */
+
+        * { box-sizing: border-box; }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden; /* 防止整頁捲動，只讓內容區捲動 */
+            font-family: "Microsoft JhengHei", "Heiti TC", sans-serif;
+            background-color: var(--main-bg);
+            user-select: none; /* 避免拖拉時選取文字 */
+        }
+
+        /* ==================== 
+           主要佈局容器 (Flexbox) 
+           ==================== */
+        .app-container {
+            display: flex;
+            width: 100vw;
             height: 100vh;
-            background: linear-gradient(160deg, #a30000 0%, #600000 100%);
-            border-right: 5px solid var(--accent-gold);
-            box-shadow: 5px 0 20px rgba(0,0,0,0.5);
-            z-index: 100;
+        }
+
+        /* ==================== 
+           左側側邊欄 
+           ==================== */
+        .sidebar {
+            width: 300px; /* 初始寬度 */
+            min-width: 200px;
+            max-width: 600px;
+            background: linear-gradient(180deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-end) 100%);
+            color: var(--gold-accent);
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
             padding: 20px;
-            box-sizing: border-box;
-            color: white;
-            text-align: center;
+            border-right: 1px solid #5a0000;
             position: relative;
+            flex-shrink: 0; /* 防止被擠壓 */
+            z-index: 200;
         }
 
-        /* 裝飾圖案 */
-        .sidebar::before {
-            content: "";
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url('data:image/svg+xml;utf8,<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><g fill="%23ffd700" fill-opacity="0.05"><path d="M20 0l20 20-20 20L0 20z"/></g></svg>');
-            pointer-events: none;
-        }
-
-        .main-title {
-            font-size: 2.5rem;
+        .sidebar-title {
+            font-size: 2rem;
             font-weight: bold;
-            color: var(--accent-gold);
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
-            line-height: 1.3;
+            margin-top: 20px;
             margin-bottom: 10px;
-            letter-spacing: 2px;
+            line-height: 1.3;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
         }
 
-        .sub-title {
+        .sidebar-subtitle {
             font-size: 1.2rem;
-            color: rgba(255,255,255,0.9);
-            letter-spacing: 2px;
-            margin-bottom: 40px; /* 與下方拉開距離 */
-            border-top: 1px solid rgba(255,215,0,0.3);
-            border-bottom: 1px solid rgba(255,215,0,0.3);
-            padding: 10px 0;
-            width: 100%;
+            color: rgba(255, 215, 0, 0.8);
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
         }
 
-        .footer-info {
-            position: absolute;
-            bottom: 20px;
-            font-size: 0.8rem;
+        .sidebar-info {
+            margin-top: auto;
+            font-size: 0.9rem;
             color: rgba(255,255,255,0.4);
+            text-align: center;
         }
-        .footer-info a { color: var(--accent-gold); text-decoration: none; }
 
-        /* --- 右側主要滾動區 (Main Content) --- */
-        .main-content {
-            flex: 1; /* 佔滿剩餘寬度 */
-            height: 100vh;
-            background-color: var(--main-bg);
+        /* ==================== 
+           可拖拉分隔線 (Resizer) 
+           ==================== */
+        .resizer {
+            width: var(--resizer-width);
+            background: #2b0000;
+            cursor: col-resize;
+            flex-shrink: 0;
+            transition: background 0.2s;
             position: relative;
-            background-image: radial-gradient(circle at 50% 50%, rgba(200, 0, 0, 0.02) 0%, transparent 60%);
+            z-index: 300;
+            box-shadow: 1px 0 0 rgba(255,255,255,0.1) inset;
         }
 
-        #scroll-container { 
-            width: 100%;
-            height: 100vh; /* 滿版高度 */
-            overflow-y: hidden; /* 隱藏原生捲軸，用 JS 控制 */
-            padding: 40px; /* 內縮一點比較好看 */
-            box-sizing: border-box;
+        /* 增加感應區域 */
+        .resizer::after {
+            content: ""; position: absolute; left: -5px; right: -5px; top: 0; bottom: 0; z-index: 1;
         }
-        
-        #content-wrapper { max-width: 1200px; margin: 0 auto; padding-bottom: 100px; }
-        
-        /* 獎項卡片 */
-        .award-group { 
-            background: #fff; 
-            border: 2px solid #e6cfa3; 
-            border-radius: 15px; 
-            margin-bottom: 40px; 
-            padding: 0 25px 25px 25px; 
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05); 
-            position: relative; 
-            overflow: clip; 
-        }
-        
-        .award-header { 
-            text-align: left; /* 改為靠左 */
-            position: sticky; top: 0; z-index: 10; 
-            background-color: #fff; 
-            padding: 20px 0 15px 0; 
-            margin-bottom: 20px; 
-            border-bottom: 3px double var(--text-red); 
-            display: flex; justify-content: space-between; align-items: baseline;
-            box-shadow: 0 5px 10px -5px rgba(0,0,0,0.1);
-        }
-        
-        .award-name { font-size: 2.2rem; color: var(--text-red); font-weight: bold; }
-        .award-count { font-size: 1rem; color: #888; }
-        
-        .winner-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; }
-        
-        .winner-item { 
-            background: #fffbf0; 
-            border-left: 6px solid var(--text-red); 
-            border-radius: 6px; 
-            padding: 12px 15px; 
-            display: flex; justify-content: space-between; align-items: center; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
-        }
-        .w-info h3 { margin: 0; font-size: 1.4rem; color: #333; }
-        .w-info p { margin: 2px 0 0; font-size: 0.9rem; color: #666; }
-        .w-id { background: #e0e0e0; color:#555; padding: 3px 8px; border-radius: 4px; font-size: 0.9rem; font-weight: bold; }
 
-        /* 右下角控制區 */
-        #controls-area { position: fixed; bottom: 20px; right: 20px; z-index: 1000; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; pointer-events: auto;}
-        #status-bar { font-size: 11px; color: #999; margin-bottom: 5px; background: rgba(255,255,255,0.8); padding: 2px 5px; border-radius: 3px;}
+        .resizer:hover, .resizer.resizing {
+            background: var(--gold-accent);
+            box-shadow: 0 0 10px var(--gold-accent);
+        }
+
+        /* ==================== 
+           右側主要內容區 
+           ==================== */
+        .main-content {
+            flex-grow: 1; /* 關鍵：填滿剩餘空間 */
+            overflow-y: auto; /* 內容過長時捲動 */
+            position: relative;
+            background-color: #8B0000;
+            background-image: repeating-linear-gradient(
+                45deg,
+                rgba(0,0,0,0.1),
+                rgba(0,0,0,0.1) 10px,
+                transparent 10px,
+                transparent 20px
+            );
+            /* 隱藏捲軸但保留功能 (Chrome/Safari) */
+            scrollbar-width: none; 
+            -ms-overflow-style: none;
+        }
+        .main-content::-webkit-scrollbar { display: none; }
+
+        /* 內容容器 */
+        #content-wrapper {
+            padding-bottom: 100px; /* 底部留白 */
+        }
+
+        /* ==================== 
+           獎項區塊 & Sticky Header 
+           ==================== */
+        .prize-section {
+            margin-bottom: 0px; 
+            padding-bottom: 40px; /* 區塊間距 */
+        }
+
+        /* 標題吸附效果 */
+        .prize-header {
+            position: sticky;
+            top: 0;
+            z-index: 100; /* 確保在卡片上方 */
+            background: linear-gradient(90deg, #a00000 0%, #600000 100%);
+            border-bottom: 3px solid var(--gold-accent);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .prize-header h2 {
+            margin: 0;
+            color: var(--gold-accent);
+            font-size: 2rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+            letter-spacing: 1px;
+        }
+
+        .prize-count {
+            background: #c0392b;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 1rem;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        /* ==================== 
+           卡片網格系統 
+           ==================== */
+        .winner-grid {
+            padding: 30px 40px;
+            display: grid;
+            /* 自動適應寬度，每張卡片最小 280px */
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+            gap: 20px;
+        }
+
+        .winner-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            border-left: 6px solid #c0392b;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .winner-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+        }
+
+        .winner-info { flex-grow: 1; }
+        
+        .winner-id {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .winner-dept { font-size: 0.9rem; color: #666; }
+
+        .winner-number {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #fff;
+            background: #333;
+            padding: 4px 10px;
+            border-radius: 6px;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        /* 浮水印裝飾 */
+        .winner-card::after {
+            content: "LUCKY";
+            position: absolute; right: -10px; bottom: -15px;
+            font-size: 4rem; font-weight: bold;
+            color: rgba(0,0,0,0.03);
+            pointer-events: none;
+            transform: rotate(-15deg);
+        }
+
+        /* ==================== 
+           功能按鈕區 
+           ==================== */
+        #controls-area {
+            position: fixed; bottom: 20px; right: 20px;
+            z-index: 1000; text-align: right;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
+        }
         
         .btn-fullscreen {
-            background: var(--text-red);
-            border: 1px solid white;
-            color: white;
-            padding: 8px 15px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-size: 0.9rem;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            transition: all 0.2s;
-            display: flex; align-items: center; gap: 5px; font-weight: bold;
+            background: #c0392b; border: 1px solid white; color: white;
+            padding: 8px 15px; border-radius: 30px; cursor: pointer;
+            font-size: 0.9rem; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-weight: bold; transition: all 0.2s;
         }
         .btn-fullscreen:hover { transform: scale(1.05); background: #a30000; }
         
-        .error-msg { color: #555; font-weight: bold; padding: 50px; text-align: center; font-size: 1.5rem;}
+        #status-bar { font-size: 11px; color: rgba(255,255,255,0.7); margin-bottom: 5px; text-shadow: 0 1px 2px #000;}
+
+        /*錯誤訊息*/
+        .error-msg { 
+            color: #fff; font-size: 1.5rem; text-align: center; margin-top: 100px; 
+            background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px;
+        }
+
     </style>
 </head>
 <body>
 
-    <aside class="sidebar">
-        <div id="main-title" class="main-title">載入中...</div>
-        <div id="sub-title" class="sub-title"></div>
+    <div class="app-container">
         
-        <div class="footer-info">
-            Designed by <a href="https://pedaleon.com/?utm_source=luckdraw&utm_medium=app" target="_blank">PedaleOn</a>
-        </div>
-    </aside>
+        <aside class="sidebar" id="sidebar">
+            <div id="main-title" class="sidebar-title">載入中...</div>
+            <div id="sub-title" class="sidebar-subtitle"></div>
+            
+            <div class="sidebar-info">
+                Designed by PedaleOn<br>
+                <span style="font-size:0.8em; opacity:0.7">拖拉邊界可調整寬度 ></span>
+            </div>
+        </aside>
 
-    <main class="main-content">
-        <div id="scroll-container">
-            <div id="content-wrapper"></div>
-        </div>
+        <div class="resizer" id="resizer"></div>
+
+        <main class="main-content" id="main-scroll-area">
+            <div id="content-wrapper">
+                </div>
+        </main>
         
         <div id="controls-area">
             <div id="status-bar"></div>
-            <button class="btn-fullscreen" onclick="callFullScreen()">
-                ⛶ 全螢幕 (F)
-            </button>
+            <button class="btn-fullscreen" onclick="callFullScreen()">⛶ 全螢幕 (F)</button>
         </div>
-    </main>
+
+    </div>
 
     <script>
+        // 設定變數
         let refreshRate = 5000;
         let scrollSpeed = 1.5;
         let isScrolling = true;
         let scrollDirection = 1;
-        let currentScrollPos = 0; // 高精度位置
+        let currentScrollPos = 0;
         let lastDataHash = "";
         let timer = null;
         let scrollFrame = null;
-        
+
+        // 監聽 PyWebview 準備就緒
         window.addEventListener('pywebviewready', function() {
             updateData();
+            initResizer(); // 啟動拖拉功能
         });
 
+        // --- 資料更新邏輯 ---
         function updateData() {
             pywebview.api.get_data().then(function(response) {
                 const res = JSON.parse(response);
@@ -323,55 +438,82 @@ html_content = """
                         if (newRate !== refreshRate) refreshRate = newRate;
                     }
                     renderUI(res.data);
-                    document.getElementById('status-bar').innerText = "更新時間: " + new Date().toLocaleTimeString();
+                    
+                    const now = new Date();
+                    document.getElementById('status-bar').innerText = "最後更新: " + now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0') + ":" + now.getSeconds().toString().padStart(2,'0');
+                    
                     if (timer) clearTimeout(timer);
                     timer = setTimeout(updateData, refreshRate);
                 }
             });
         }
 
+        // --- 渲染介面 (核心 UI 生成) ---
         function renderUI(groupedData) {
             const currentHash = JSON.stringify(groupedData);
-            if (currentHash === lastDataHash) return;
+            if (currentHash === lastDataHash) return; // 資料沒變就不重繪
             lastDataHash = currentHash;
+            
             const wrapper = document.getElementById('content-wrapper');
             let html = "";
             const awards = Object.keys(groupedData);
+
             if (awards.length === 0) {
-                wrapper.innerHTML = "<div style='text-align:center;color:#999;margin-top:100px;font-size:1.5rem'>等待開獎中...</div>";
+                wrapper.innerHTML = "<div class='error-msg'>目前沒有得獎名單，請確認 Excel。</div>";
                 return;
             }
+
+            // 遍歷每個獎項，生成 Section
             awards.forEach(award => {
                 const list = groupedData[award];
-                html += `<div class="award-group"><div class="award-header"><span class="award-name">${award}</span><span class="award-count">共${list.length}位</span></div><div class="winner-grid">`;
+                
+                // 1. 獎項標題 (Sticky Header)
+                html += `
+                <section class="prize-section">
+                    <div class="prize-header">
+                        <h2>${award}</h2>
+                        <span class="prize-count">共 ${list.length} 位</span>
+                    </div>
+                    <div class="winner-grid">`;
+                
+                // 2. 得獎者卡片
                 list.forEach(p => {
-                    html += `<div class="winner-item"><div class="w-info"><h3>${p.name}</h3><p>${p.dept}</p></div><div class="w-id">${p.empId}</div></div>`;
+                    html += `
+                        <div class="winner-card">
+                            <div class="winner-info">
+                                <div class="winner-id">${p.name}</div>
+                                <div class="winner-dept">${p.dept}</div>
+                            </div>
+                            <div class="winner-number">${p.empId}</div>
+                        </div>`;
                 });
-                html += `</div></div>`;
+
+                html += `</div></section>`;
             });
+            
             wrapper.innerHTML = html;
             
+            // 資料更新後重置捲動狀態（如果需要）
             setTimeout(() => { 
-                scrollDirection = 1; 
                 checkAndStartScroll(); 
             }, 100);
         }
 
+        // --- 捲動邏輯 (針對 .main-content) ---
         function checkAndStartScroll() {
-            const container = document.getElementById('scroll-container');
+            const container = document.getElementById('main-scroll-area'); // 注意這裡換成新的 ID
             if (scrollFrame) cancelAnimationFrame(scrollFrame);
             
+            // 如果內容比視窗高，才需要捲動
             if (container.scrollHeight > container.clientHeight) {
                 isScrolling = true;
                 currentScrollPos = container.scrollTop;
                 scrollLoop();
-            } else {
-                container.scrollTop = 0;
             }
         }
 
         function scrollLoop() {
-            const container = document.getElementById('scroll-container');
+            const container = document.getElementById('main-scroll-area');
             
             if (isScrolling) {
                 currentScrollPos += (scrollSpeed * scrollDirection);
@@ -381,10 +523,10 @@ html_content = """
                 if (scrollDirection === 1 && (currentScrollPos + container.clientHeight >= container.scrollHeight - 2)) {
                     isScrolling = false;
                     setTimeout(() => {
-                        scrollDirection = -1; 
+                        scrollDirection = -1; // 往回捲
                         isScrolling = true;
                         scrollFrame = requestAnimationFrame(scrollLoop);
-                    }, 3000); 
+                    }, 3000); // 到底停留 3 秒
                     return;
                 }
 
@@ -394,22 +536,53 @@ html_content = """
                     container.scrollTop = 0;
                     isScrolling = false;
                     setTimeout(() => {
-                        scrollDirection = 1; 
+                        scrollDirection = 1; // 往下捲
                         isScrolling = true;
                         scrollFrame = requestAnimationFrame(scrollLoop);
-                    }, 3000); 
+                    }, 3000); // 到頂停留 3 秒
                     return;
                 }
             }
             scrollFrame = requestAnimationFrame(scrollLoop);
         }
 
+        // --- 側邊欄拖拉邏輯 ---
+        function initResizer() {
+            const sidebar = document.getElementById('sidebar');
+            const resizer = document.getElementById('resizer');
+            let isResizing = false;
+
+            resizer.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                resizer.classList.add('resizing');
+                document.body.style.cursor = 'col-resize';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                let newWidth = e.clientX;
+                // 設定最小與最大寬度
+                if (newWidth >= 200 && newWidth <= 600) {
+                    sidebar.style.width = `${newWidth}px`;
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    resizer.classList.remove('resizing');
+                    document.body.style.cursor = 'default';
+                }
+            });
+        }
+
         function callFullScreen() {
             pywebview.api.toggle_fullscreen();
         }
 
+        // 鍵盤控制
         document.addEventListener('keydown', (e) => { 
-            if(e.key === ' ') { 
+            if(e.key === ' ') { // 空白鍵暫停/開始
                 isScrolling = !isScrolling; 
                 if(isScrolling) scrollLoop();
             }
@@ -424,13 +597,13 @@ html_content = """
 
 if __name__ == '__main__':
     api = Api()
-    # 注意：這裡的 width 建議設寬一點，模擬寬螢幕效果
+    # 建議使用較大的初始視窗
     window = webview.create_window(
         'Lucky Draw Board', 
         html=html_content, 
         js_api=api,
         width=1280, 
-        height=720,
-        background_color='#8B0000'
+        height=800,
+        background_color='#800000'
     )
     webview.start(debug=False)
