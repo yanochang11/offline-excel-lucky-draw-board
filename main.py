@@ -110,7 +110,7 @@ class Api:
         window = webview.windows[0]
         window.toggle_fullscreen()
 
-# --- HTML/CSS/JS (全新 UI：可拖拉側邊欄 + Sticky Header + 滿版優化) ---
+# --- HTML/CSS/JS (融合版：舊版側邊欄風格 + 新版右側功能) ---
 html_content = """
 <!DOCTYPE html>
 <html lang="zh-TW">
@@ -123,30 +123,25 @@ html_content = """
            全域變數與重置 
            ==================== */
         :root {
-            --sidebar-bg-start: #4a0000;
-            --sidebar-bg-end: #1a0505;
+            --sidebar-bg: #8B0000;
             --main-bg: #800000;
             --card-bg: #fffbf0;
             --gold-accent: #FFD700;
             --text-dark: #333;
-            --resizer-width: 6px;
+            --resizer-width: 5px; /* 調整為 5px 模擬原本的邊框寬度 */
         }
 
         * { box-sizing: border-box; }
 
         body, html {
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
             height: 100%;
-            overflow: hidden; /* 防止整頁捲動，只讓內容區捲動 */
+            overflow: hidden; 
             font-family: "Microsoft JhengHei", "Heiti TC", sans-serif;
             background-color: var(--main-bg);
-            user-select: none; /* 避免拖拉時選取文字 */
+            user-select: none;
         }
 
-        /* ==================== 
-           主要佈局容器 (Flexbox) 
-           ==================== */
         .app-container {
             display: flex;
             width: 100vw;
@@ -154,77 +149,102 @@ html_content = """
         }
 
         /* ==================== 
-           左側側邊欄 
+           左側側邊欄 (還原舊版設計) 
            ==================== */
         .sidebar {
-            width: 300px; /* 初始寬度 */
+            width: 320px;
             min-width: 200px;
             max-width: 600px;
-            background: linear-gradient(180deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-end) 100%);
-            color: var(--gold-accent);
+            
+            /* 1. 還原漸層背景 */
+            background: linear-gradient(160deg, #a30000 0%, #600000 100%);
+            color: white;
+            
+            /* 2. 還原置中對齊佈局 */
             display: flex;
             flex-direction: column;
-            padding: 20px;
-            border-right: 1px solid #5a0000;
-            position: relative;
-            flex-shrink: 0; /* 防止被擠壓 */
-            z-index: 200;
-        }
-
-        .sidebar-title {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            line-height: 1.3;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-        }
-
-        .sidebar-subtitle {
-            font-size: 1.2rem;
-            color: rgba(255, 215, 0, 0.8);
-            margin-bottom: 40px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 215, 0, 0.3);
-        }
-
-        .sidebar-info {
-            margin-top: auto;
-            font-size: 0.9rem;
-            color: rgba(255,255,255,0.4);
+            justify-content: center;
+            align-items: center;
             text-align: center;
+            
+            padding: 20px;
+            position: relative;
+            flex-shrink: 0;
+            z-index: 200;
+            
+            /* 原本的 border-right 移給 .resizer 處理，這裡改用 box-shadow */
+            box-shadow: 5px 0 20px rgba(0,0,0,0.5);
         }
+
+        /* 3. 還原背景裝飾圖案 */
+        .sidebar::before {
+            content: "";
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><g fill="%23ffd700" fill-opacity="0.05"><path d="M20 0l20 20-20 20L0 20z"/></g></svg>');
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        /* 確保內容在背景之上 */
+        .sidebar > * { z-index: 1; position: relative; }
+
+        /* 4. 還原標題文字樣式 */
+        .main-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--gold-accent);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
+            line-height: 1.3;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        /* 5. 還原副標題樣式 (上下有線) */
+        .sub-title {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.9);
+            letter-spacing: 2px;
+            margin-bottom: 40px; 
+            border-top: 1px solid rgba(255,215,0,0.3);
+            border-bottom: 1px solid rgba(255,215,0,0.3);
+            padding: 10px 0;
+            width: 100%;
+        }
+
+        .footer-info {
+            position: absolute; bottom: 20px;
+            font-size: 0.8rem; color: rgba(255,255,255,0.4);
+        }
+        .footer-info a { color: var(--gold-accent); text-decoration: none; }
 
         /* ==================== 
-           可拖拉分隔線 (Resizer) 
+           可拖拉分隔線 (改為金色，融合舊版邊框視覺) 
            ==================== */
         .resizer {
             width: var(--resizer-width);
-            background: #2b0000;
+            background: var(--gold-accent); /* 金色 */
             cursor: col-resize;
             flex-shrink: 0;
-            transition: background 0.2s;
             position: relative;
             z-index: 300;
-            box-shadow: 1px 0 0 rgba(255,255,255,0.1) inset;
+            box-shadow: 1px 0 5px rgba(0,0,0,0.3);
         }
 
-        /* 增加感應區域 */
         .resizer::after {
             content: ""; position: absolute; left: -5px; right: -5px; top: 0; bottom: 0; z-index: 1;
         }
 
         .resizer:hover, .resizer.resizing {
-            background: var(--gold-accent);
+            background: #fff; /* hover 時變亮，提示可互動 */
             box-shadow: 0 0 10px var(--gold-accent);
         }
 
         /* ==================== 
-           右側主要內容區 
+           右側主要內容區 (保持新版設計) 
            ==================== */
         .main-content {
-            flex-grow: 1; /* 關鍵：填滿剩餘空間 */
-            overflow-y: auto; /* 內容過長時捲動 */
+            flex-grow: 1;
+            overflow-y: auto;
             position: relative;
             background-color: #8B0000;
             background-image: repeating-linear-gradient(
@@ -234,125 +254,75 @@ html_content = """
                 transparent 10px,
                 transparent 20px
             );
-            /* 隱藏捲軸但保留功能 (Chrome/Safari) */
             scrollbar-width: none; 
             -ms-overflow-style: none;
         }
         .main-content::-webkit-scrollbar { display: none; }
 
-        /* 內容容器 */
-        #content-wrapper {
-            padding-bottom: 100px; /* 底部留白 */
-        }
+        #content-wrapper { padding-bottom: 100px; }
 
-        /* ==================== 
-           獎項區塊 & Sticky Header 
-           ==================== */
-        .prize-section {
-            margin-bottom: 0px; 
-            padding-bottom: 40px; /* 區塊間距 */
-        }
+        .prize-section { padding-bottom: 40px; }
 
-        /* 標題吸附效果 */
         .prize-header {
-            position: sticky;
-            top: 0;
-            z-index: 100; /* 確保在卡片上方 */
+            position: sticky; top: 0; z-index: 100;
             background: linear-gradient(90deg, #a00000 0%, #600000 100%);
             border-bottom: 3px solid var(--gold-accent);
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
             padding: 15px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: flex; justify-content: space-between; align-items: center;
             backdrop-filter: blur(5px);
         }
 
         .prize-header h2 {
-            margin: 0;
-            color: var(--gold-accent);
-            font-size: 2rem;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.6);
-            letter-spacing: 1px;
+            margin: 0; color: var(--gold-accent); font-size: 2rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.6); letter-spacing: 1px;
         }
 
         .prize-count {
-            background: #c0392b;
-            color: white;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 1rem;
+            background: #c0392b; color: white; padding: 5px 15px;
+            border-radius: 20px; font-size: 1rem;
             border: 1px solid rgba(255,255,255,0.3);
         }
 
-        /* ==================== 
-           卡片網格系統 
-           ==================== */
         .winner-grid {
             padding: 30px 40px;
             display: grid;
-            /* 自動適應寬度，每張卡片最小 280px */
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
             gap: 20px;
         }
 
         .winner-card {
             background: var(--card-bg);
-            border-radius: 12px;
-            padding: 15px 20px;
-            display: flex;
-            align-items: center;
+            border-radius: 12px; padding: 15px 20px;
+            display: flex; align-items: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             border-left: 6px solid #c0392b;
             transition: transform 0.2s, box-shadow 0.2s;
-            position: relative;
-            overflow: hidden;
+            position: relative; overflow: hidden;
         }
 
         .winner-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+            transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.3);
         }
 
         .winner-info { flex-grow: 1; }
-        
-        .winner-id {
-            font-size: 1.4rem;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 4px;
-        }
-
+        .winner-id { font-size: 1.4rem; font-weight: bold; color: #333; margin-bottom: 4px; }
         .winner-dept { font-size: 0.9rem; color: #666; }
-
         .winner-number {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #fff;
-            background: #333;
-            padding: 4px 10px;
-            border-radius: 6px;
-            min-width: 50px;
-            text-align: center;
+            font-size: 1.1rem; font-weight: bold; color: #fff;
+            background: #333; padding: 4px 10px; border-radius: 6px;
+            min-width: 50px; text-align: center;
         }
 
-        /* 浮水印裝飾 */
         .winner-card::after {
-            content: "LUCKY";
-            position: absolute; right: -10px; bottom: -15px;
-            font-size: 4rem; font-weight: bold;
-            color: rgba(0,0,0,0.03);
-            pointer-events: none;
-            transform: rotate(-15deg);
+            content: "LUCKY"; position: absolute; right: -10px; bottom: -15px;
+            font-size: 4rem; font-weight: bold; color: rgba(0,0,0,0.03);
+            pointer-events: none; transform: rotate(-15deg);
         }
 
-        /* ==================== 
-           功能按鈕區 
-           ==================== */
         #controls-area {
-            position: fixed; bottom: 20px; right: 20px;
-            z-index: 1000; text-align: right;
-            display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
+            position: fixed; bottom: 20px; right: 20px; z-index: 1000;
+            text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
         }
         
         .btn-fullscreen {
@@ -364,13 +334,7 @@ html_content = """
         .btn-fullscreen:hover { transform: scale(1.05); background: #a30000; }
         
         #status-bar { font-size: 11px; color: rgba(255,255,255,0.7); margin-bottom: 5px; text-shadow: 0 1px 2px #000;}
-
-        /*錯誤訊息*/
-        .error-msg { 
-            color: #fff; font-size: 1.5rem; text-align: center; margin-top: 100px; 
-            background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px;
-        }
-
+        .error-msg { color: #fff; font-size: 1.5rem; text-align: center; margin-top: 100px; }
     </style>
 </head>
 <body>
@@ -378,20 +342,19 @@ html_content = """
     <div class="app-container">
         
         <aside class="sidebar" id="sidebar">
-            <div id="main-title" class="sidebar-title">載入中...</div>
-            <div id="sub-title" class="sidebar-subtitle"></div>
+            <div id="main-title" class="main-title">載入中...</div>
+            <div id="sub-title" class="sub-title"></div>
             
-            <div class="sidebar-info">
-                Designed by PedaleOn<br>
-                <span style="font-size:0.8em; opacity:0.7">拖拉邊界可調整寬度 ></span>
+            <div class="footer-info">
+                Designed by <a href="https://pedaleon.com" target="_blank">PedaleOn</a><br>
+                <span style="font-size:0.8em; opacity:0.7">拖拉金線可調整寬度 ></span>
             </div>
         </aside>
 
         <div class="resizer" id="resizer"></div>
 
         <main class="main-content" id="main-scroll-area">
-            <div id="content-wrapper">
-                </div>
+            <div id="content-wrapper"></div>
         </main>
         
         <div id="controls-area">
@@ -402,7 +365,6 @@ html_content = """
     </div>
 
     <script>
-        // 設定變數
         let refreshRate = 5000;
         let scrollSpeed = 1.5;
         let isScrolling = true;
@@ -412,13 +374,11 @@ html_content = """
         let timer = null;
         let scrollFrame = null;
 
-        // 監聽 PyWebview 準備就緒
         window.addEventListener('pywebviewready', function() {
             updateData();
-            initResizer(); // 啟動拖拉功能
+            initResizer();
         });
 
-        // --- 資料更新邏輯 ---
         function updateData() {
             pywebview.api.get_data().then(function(response) {
                 const res = JSON.parse(response);
@@ -448,10 +408,9 @@ html_content = """
             });
         }
 
-        // --- 渲染介面 (核心 UI 生成) ---
         function renderUI(groupedData) {
             const currentHash = JSON.stringify(groupedData);
-            if (currentHash === lastDataHash) return; // 資料沒變就不重繪
+            if (currentHash === lastDataHash) return;
             lastDataHash = currentHash;
             
             const wrapper = document.getElementById('content-wrapper');
@@ -463,11 +422,8 @@ html_content = """
                 return;
             }
 
-            // 遍歷每個獎項，生成 Section
             awards.forEach(award => {
                 const list = groupedData[award];
-                
-                // 1. 獎項標題 (Sticky Header)
                 html += `
                 <section class="prize-section">
                     <div class="prize-header">
@@ -475,8 +431,6 @@ html_content = """
                         <span class="prize-count">共 ${list.length} 位</span>
                     </div>
                     <div class="winner-grid">`;
-                
-                // 2. 得獎者卡片
                 list.forEach(p => {
                     html += `
                         <div class="winner-card">
@@ -487,24 +441,17 @@ html_content = """
                             <div class="winner-number">${p.empId}</div>
                         </div>`;
                 });
-
                 html += `</div></section>`;
             });
             
             wrapper.innerHTML = html;
-            
-            // 資料更新後重置捲動狀態（如果需要）
-            setTimeout(() => { 
-                checkAndStartScroll(); 
-            }, 100);
+            setTimeout(() => { checkAndStartScroll(); }, 100);
         }
 
-        // --- 捲動邏輯 (針對 .main-content) ---
         function checkAndStartScroll() {
-            const container = document.getElementById('main-scroll-area'); // 注意這裡換成新的 ID
+            const container = document.getElementById('main-scroll-area');
             if (scrollFrame) cancelAnimationFrame(scrollFrame);
             
-            // 如果內容比視窗高，才需要捲動
             if (container.scrollHeight > container.clientHeight) {
                 isScrolling = true;
                 currentScrollPos = container.scrollTop;
@@ -514,39 +461,25 @@ html_content = """
 
         function scrollLoop() {
             const container = document.getElementById('main-scroll-area');
-            
             if (isScrolling) {
                 currentScrollPos += (scrollSpeed * scrollDirection);
                 container.scrollTop = currentScrollPos;
                 
-                // 到底部
                 if (scrollDirection === 1 && (currentScrollPos + container.clientHeight >= container.scrollHeight - 2)) {
                     isScrolling = false;
-                    setTimeout(() => {
-                        scrollDirection = -1; // 往回捲
-                        isScrolling = true;
-                        scrollFrame = requestAnimationFrame(scrollLoop);
-                    }, 3000); // 到底停留 3 秒
+                    setTimeout(() => { scrollDirection = -1; isScrolling = true; scrollFrame = requestAnimationFrame(scrollLoop); }, 3000);
                     return;
                 }
-
-                // 到頂部
                 if (scrollDirection === -1 && currentScrollPos <= 0) {
-                    currentScrollPos = 0;
-                    container.scrollTop = 0;
+                    currentScrollPos = 0; container.scrollTop = 0;
                     isScrolling = false;
-                    setTimeout(() => {
-                        scrollDirection = 1; // 往下捲
-                        isScrolling = true;
-                        scrollFrame = requestAnimationFrame(scrollLoop);
-                    }, 3000); // 到頂停留 3 秒
+                    setTimeout(() => { scrollDirection = 1; isScrolling = true; scrollFrame = requestAnimationFrame(scrollLoop); }, 3000);
                     return;
                 }
             }
             scrollFrame = requestAnimationFrame(scrollLoop);
         }
 
-        // --- 側邊欄拖拉邏輯 ---
         function initResizer() {
             const sidebar = document.getElementById('sidebar');
             const resizer = document.getElementById('resizer');
@@ -561,7 +494,6 @@ html_content = """
             document.addEventListener('mousemove', (e) => {
                 if (!isResizing) return;
                 let newWidth = e.clientX;
-                // 設定最小與最大寬度
                 if (newWidth >= 200 && newWidth <= 600) {
                     sidebar.style.width = `${newWidth}px`;
                 }
@@ -580,9 +512,8 @@ html_content = """
             pywebview.api.toggle_fullscreen();
         }
 
-        // 鍵盤控制
         document.addEventListener('keydown', (e) => { 
-            if(e.key === ' ') { // 空白鍵暫停/開始
+            if(e.key === ' ') { 
                 isScrolling = !isScrolling; 
                 if(isScrolling) scrollLoop();
             }
@@ -597,7 +528,6 @@ html_content = """
 
 if __name__ == '__main__':
     api = Api()
-    # 建議使用較大的初始視窗
     window = webview.create_window(
         'Lucky Draw Board', 
         html=html_content, 
